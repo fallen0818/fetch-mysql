@@ -4,9 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dbpanelco Customer Search</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         --bg: #f4f7fb;
@@ -24,7 +27,7 @@
 
       body {
         margin: 0;
-        font-family: Arial, sans-serif;
+        font-family: "Google Sans Flex", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
       }
@@ -166,7 +169,7 @@
         top: 0;
         z-index: 1;
         background: #172554;
-        color:papayawhip;
+        color: papayawhip;
         border-color: rgba(148, 163, 184, 0.2);
       }
 
@@ -319,13 +322,7 @@
             <option value="Disconnected">Disconnected</option>
           </select>
           <select id="monthFilter">
-            <option value="kwh202601">2026-01</option>
-            <option value="kwh202602">2026-02</option>
-            <option value="kwh202603">2026-03</option>
-            <option value="kwh202604">2026-04</option>
-            <option value="kwh202605">2026-05</option>
-            <option value="kwh202606">2026-06</option>
-            <option value="kwh202607" selected>2026-07</option>
+            <option value="">Loading months...</option>
           </select>
           <button type="submit">Search</button>
           <button id="clearFilters" type="button" class="secondary">
@@ -439,16 +436,70 @@
       let currentHistoryRows = [];
       let currentCustomerName = "customer";
       let currentCustomerDetails = {};
+      let defaultMonthValue = "";
 
-      const monthLabels = {
-        kwh202601: "2026-01",
-        kwh202602: "2026-02",
-        kwh202603: "2026-03",
-        kwh202604: "2026-04",
-        kwh202605: "2026-05",
-        kwh202606: "2026-06",
-        kwh202607: "2026-07",
-      };
+      let monthLabels = {};
+
+      function formatMonthLabel(monthKey) {
+        const match = /^kwh(\d{4})(\d{2})$/.exec(String(monthKey || ""));
+        if (!match) {
+          return String(monthKey || "KWh");
+        }
+        return `${match[1]}-${match[2]}`;
+      }
+
+      function setMonthOptions(months, defaultMonth = "") {
+        const safeMonths = Array.isArray(months) ? months : [];
+        defaultMonthValue =
+          defaultMonth || safeMonths[safeMonths.length - 1] || "";
+        monthLabels = {};
+        safeMonths.forEach((month) => {
+          monthLabels[month] = formatMonthLabel(month);
+        });
+
+        monthFilter.innerHTML = safeMonths.length
+          ? safeMonths
+              .map(
+                (month) =>
+                  `<option value="${month}" ${month === defaultMonth ? "selected" : ""}>${formatMonthLabel(month)}</option>`,
+              )
+              .join("")
+          : '<option value="">No months available</option>';
+
+        if (safeMonths.length && !monthFilter.value) {
+          monthFilter.value = defaultMonthValue;
+        }
+
+        updateKwhHeader(monthFilter.value || defaultMonthValue || "");
+      }
+
+      async function loadAvailableMonths() {
+        try {
+          const response = await fetch("/api/months");
+          if (!response.ok) {
+            return;
+          }
+
+          const data = await response.json();
+          const months = Array.isArray(data.months) ? data.months : [];
+          const defaultMonth =
+            data.defaultMonth || months[months.length - 1] || "";
+          setMonthOptions(months, defaultMonth);
+          if (months.length) {
+            searchCustomers(
+              searchInput.value.trim(),
+              statusFilter.value,
+              routeFilter.value.trim(),
+              defaultMonth,
+              1,
+            );
+          }
+        } catch (error) {
+          monthFilter.innerHTML = '<option value="kwh202607">2026-07</option>';
+          monthFilter.value = "kwh202607";
+          updateKwhHeader("kwh202607");
+        }
+      }
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -460,7 +511,7 @@
       }
 
       function updateKwhHeader(month) {
-        const label = monthLabels[month] || "KWh";
+        const label = monthLabels[month] || formatMonthLabel(month) || "KWh";
         kwhHeader.textContent = `KWh ${label}`;
       }
 
@@ -797,9 +848,11 @@
         searchInput.value = "";
         routeFilter.value = "";
         statusFilter.value = "";
-        monthFilter.value = "kwh202607";
+        if (defaultMonthValue) {
+          monthFilter.value = defaultMonthValue;
+        }
         currentPage = 1;
-        searchCustomers();
+        searchCustomers("", "", "", monthFilter.value || defaultMonthValue, 1);
       });
 
       prevPageBtn.addEventListener("click", () => {
@@ -826,7 +879,7 @@
         }
       });
 
-      searchCustomers();
+      loadAvailableMonths();
     </script>
   </body>
 </html>

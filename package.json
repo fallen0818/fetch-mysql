@@ -6,6 +6,9 @@
     "fetch": "node package.js fetch",
     "push": "node package.js push",
     "sync": "node package.js sync",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "node --check server.js && node --check api/index.js",
     "test": "node --check package.js"
   },
   "keywords": [],
@@ -15,6 +18,7 @@
   "dependencies": {
     "body-parser": "^2.3.0",
     "express": "^5.2.1",
-    "mysql2": "^3.12.0"
+    "mysql2": "^3.12.0",
+    "serverless-http": "^4.0.0"
   }
 }

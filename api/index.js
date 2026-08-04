@@ -1,19 +1,19 @@
 const express = require("express");
-const path = require("path");
 const mysql = require("mysql2");
+const serverless = require("serverless-http");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
 const DB_CONFIG = {
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "0818",
   database: process.env.DB_NAME || "dbpanelco",
+  port: Number(process.env.DB_PORT || 3306),
 };
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
 
 function createDbConnection() {
   return mysql.createConnection(DB_CONFIG);
@@ -50,6 +50,10 @@ async function getAvailableKwhMonths(connection) {
   });
 }
 
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, message: "dbpanelco API is live" });
+});
+
 app.get("/api/months", async (req, res) => {
   try {
     const connection = createDbConnection();
@@ -57,12 +61,10 @@ app.get("/api/months", async (req, res) => {
     const defaultMonth = availableMonths.includes("kwh202607")
       ? "kwh202607"
       : availableMonths[availableMonths.length - 1] || "kwh202607";
+
     connection.end();
 
-    return res.json({
-      months: availableMonths,
-      defaultMonth,
-    });
+    return res.json({ months: availableMonths, defaultMonth });
   } catch (error) {
     return res.status(500).json({
       message: "Unable to load month metadata.",
@@ -93,7 +95,7 @@ app.get("/api/customers", async (req, res) => {
       ? month
       : defaultMonth;
 
-    const rows = await new Promise((resolve, reject) => {
+    const data = await new Promise((resolve, reject) => {
       connection.connect((error) => {
         if (error) {
           reject(error);
@@ -182,7 +184,7 @@ app.get("/api/customers", async (req, res) => {
       });
     });
 
-    return res.json(rows);
+    return res.json(data);
   } catch (error) {
     return res.status(500).json({
       message: "Unable to search customers right now.",
@@ -200,7 +202,6 @@ app.get("/api/customer/:id/history", async (req, res) => {
 
   try {
     const connection = createDbConnection();
-
     const customerData = await new Promise((resolve, reject) => {
       connection.connect((error) => {
         if (error) {
@@ -258,10 +259,5 @@ app.get("/api/customer/:id/history", async (req, res) => {
   }
 });
 
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.listen(PORT, () => {
-  console.log(`Customer search is running at http://localhost:${PORT}`);
-});
+module.exports = app;
+module.exports.handler = serverless(app);
