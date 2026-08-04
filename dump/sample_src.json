@@ -1,0 +1,31 @@
+{
+  "database": "sample_src",
+  "tables": [
+    "users"
+  ],
+  "schema": [
+    "CREATE TABLE `users` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `name` varchar(100) NOT NULL,\n  `email` varchar(150) NOT NULL,\n  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `email` (`email`)\n) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+  ],
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "Alice",
+        "email": "alice@example.com",
+        "created_at": "2026-08-04T00:12:33.000Z"
+      },
+      {
+        "id": 2,
+        "name": "Bob",
+        "email": "bob@example.com",
+        "created_at": "2026-08-04T00:12:33.000Z"
+      },
+      {
+        "id": 3,
+        "name": "Charlie",
+        "email": "charlie@example.com",
+        "created_at": "2026-08-04T00:12:33.000Z"
+      }
+    ]
+  }
+}

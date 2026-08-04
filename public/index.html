@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dbpanelco Customer Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --accent: #2563eb;
+        --accent-dark: #8d98b6;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --border: #dbe3f0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 24px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        padding: 30px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 2rem;
+      }
+
+      .subtitle {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+
+      .search-bar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+
+      .search-wrap {
+        position: relative;
+        flex: 1 1 260px;
+      }
+
+      .search-wrap input {
+        width: 100%;
+      }
+
+      input,
+      select {
+        flex: 1 1 200px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 1rem;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.78);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 30;
+        backdrop-filter: blur(4px);
+      }
+
+      .modal.open {
+        display: flex;
+      }
+
+      .modal-content {
+        background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+        color: #e5eefb;
+        width: min(760px, 100%);
+        max-height: 82vh;
+        border-radius: 18px;
+        padding: 24px 24px 18px;
+        box-shadow: 0 18px 50px rgba(14, 116, 144, 0.3);
+        position: relative;
+        border: 1px solid rgba(96, 165, 250, 0.35);
+      }
+
+      .modal-close {
+        position: absolute;
+        right: 14px;
+        top: 10px;
+        border: none;
+        background: transparent;
+        font-size: 1.9rem;
+        color: #cbd5e1;
+        cursor: pointer;
+      }
+
+      .modal-close:hover {
+        color: #bcc3c9;
+      }
+
+      #historyTitle {
+        margin: 0 0 8px;
+        font-size: 1.5rem;
+        color: #f8fafc;
+      }
+
+      #historySummary {
+        color: #cbd5e1;
+        margin-bottom: 14px;
+      }
+
+      .history-scroll {
+        max-height: 52vh;
+        overflow: auto;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(15, 23, 42, 0.85);
+      }
+
+      .history-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin: 8px 0 12px;
+      }
+
+      .history-download {
+        background: #10b981;
+        color: white;
+      }
+
+      .history-download:hover {
+        background: #059669;
+      }
+
+      .history-table {
+        width: 100%;
+        margin-top: 0;
+        border-collapse: collapse;
+      }
+
+      .history-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #172554;
+        color:papayawhip;
+        border-color: rgba(148, 163, 184, 0.2);
+      }
+
+      .history-table tbody td {
+        background: rgba(15, 23, 42, 0.4);
+        color: #e2e8f0;
+        border-color: rgba(148, 163, 184, 0.2);
+      }
+
+      .history-table tbody tr:nth-child(even) td {
+        background: rgba(30, 41, 59, 0.7);
+      }
+
+      .history-table tbody tr:hover td {
+        background: rgba(59, 130, 246, 0.2);
+        color: #f8fafc;
+      }
+
+      .suggestions {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+        z-index: 10;
+        overflow: hidden;
+        display: none;
+      }
+
+      .suggestion-item {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease;
+        background: rgba(15, 23, 42, 0.9);
+        color: #e2e8f0;
+      }
+
+      .suggestion-item:last-child {
+        border-bottom: none;
+      }
+
+      .suggestion-item:hover,
+      .suggestion-item:focus {
+        background: rgba(37, 99, 235, 0.22);
+        color: #f8fafc;
+        outline: none;
+      }
+
+      .suggestion-name {
+        font-weight: 700;
+        color: inherit;
+      }
+
+      .suggestion-meta {
+        color: #cbd5e1;
+        font-size: 0.85rem;
+        margin-top: 4px;
+      }
+
+      .suggestion-item:hover .suggestion-meta,
+      .suggestion-item:focus .suggestion-meta {
+        color: #e2e8f0;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: white;
+        padding: 12px 18px;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+
+      .secondary:hover {
+        background: #d1d5db;
+      }
+
+      button:hover {
+        background: var(--accent-dark);
+      }
+
+      .status {
+        margin-bottom: 18px;
+        color: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f8fafc;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="panel">
+        <h1>Customer Search</h1>
+        <p class="subtitle">dbpanelco → tblcustomer</p>
+
+        <form id="searchForm" class="search-bar">
+          <div class="search-wrap">
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Type a customer name to search"
+              autocomplete="off"
+            />
+            <div id="suggestions" class="suggestions" aria-live="polite"></div>
+          </div>
+          <input
+            id="routeFilter"
+            type="number"
+            min="1"
+            placeholder="Route number"
+          />
+          <select id="statusFilter">
+            <option value="">All status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Disconnected">Disconnected</option>
+          </select>
+          <select id="monthFilter">
+            <option value="kwh202601">2026-01</option>
+            <option value="kwh202602">2026-02</option>
+            <option value="kwh202603">2026-03</option>
+            <option value="kwh202604">2026-04</option>
+            <option value="kwh202605">2026-05</option>
+            <option value="kwh202606">2026-06</option>
+            <option value="kwh202607" selected>2026-07</option>
+          </select>
+          <button type="submit">Search</button>
+          <button id="clearFilters" type="button" class="secondary">
+            Clear
+          </button>
+        </form>
+
+        <div id="status" class="status">Loading customers...</div>
+        <div
+          id="summary"
+          class="status"
+          style="margin-top: -8px; margin-bottom: 12px"
+        ></div>
+
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Address</th>
+                <th>Barangay</th>
+                <th>Town</th>
+                <th>Route</th>
+                <th>Status</th>
+                <th id="kwhHeader">KWh 2026-07</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr>
+                <td colspan="9" class="empty">No results yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          class="search-bar"
+          style="
+            margin-top: 18px;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <button id="prevPage" type="button" class="secondary">
+            Previous
+          </button>
+          <div id="pageInfo" class="status" style="margin: 0">Page 1</div>
+          <button id="nextPage" type="button" class="secondary">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="historyModal" class="modal" aria-hidden="true">
+      <div class="modal-content">
+        <button id="closeHistoryModal" class="modal-close" type="button">
+          ×
+        </button>
+        <h2 id="historyTitle">Customer KWh History</h2>
+        <div id="historySummary" class="status"></div>
+        <div class="history-actions">
+          <button
+            id="downloadHistoryCsv"
+            type="button"
+            class="history-download"
+          >
+            Export CSV
+          </button>
+        </div>
+        <div class="history-scroll">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>KWh</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const searchForm = document.getElementById("searchForm");
+      const searchInput = document.getElementById("searchInput");
+      const routeFilter = document.getElementById("routeFilter");
+      const statusFilter = document.getElementById("statusFilter");
+      const monthFilter = document.getElementById("monthFilter");
+      const clearFiltersBtn = document.getElementById("clearFilters");
+      const statusBox = document.getElementById("status");
+      const summaryBox = document.getElementById("summary");
+      const resultsBody = document.getElementById("resultsBody");
+      const suggestionsBox = document.getElementById("suggestions");
+      const kwhHeader = document.getElementById("kwhHeader");
+      const prevPageBtn = document.getElementById("prevPage");
+      const nextPageBtn = document.getElementById("nextPage");
+      const pageInfo = document.getElementById("pageInfo");
+      const historyModal = document.getElementById("historyModal");
+      const historyTitle = document.getElementById("historyTitle");
+      const historySummary = document.getElementById("historySummary");
+      const historyBody = document.getElementById("historyBody");
+      const closeHistoryModalBtn = document.getElementById("closeHistoryModal");
+      const downloadHistoryCsvBtn =
+        document.getElementById("downloadHistoryCsv");
+
+      let debounceTimer = null;
+      let currentPage = 1;
+      let totalPages = 1;
+      let currentHistoryRows = [];
+      let currentCustomerName = "customer";
+      let currentCustomerDetails = {};
+
+      const monthLabels = {
+        kwh202601: "2026-01",
+        kwh202602: "2026-02",
+        kwh202603: "2026-03",
+        kwh202604: "2026-04",
+        kwh202605: "2026-05",
+        kwh202606: "2026-06",
+        kwh202607: "2026-07",
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function updateKwhHeader(month) {
+        const label = monthLabels[month] || "KWh";
+        kwhHeader.textContent = `KWh ${label}`;
+      }
+
+      function renderSuggestions(customers) {
+        if (!customers.length) {
+          suggestionsBox.innerHTML = "";
+          suggestionsBox.style.display = "none";
+          return;
+        }
+
+        suggestionsBox.innerHTML = customers
+          .map(
+            (customer) => `
+              <div
+                class="suggestion-item"
+                data-name="${escapeHtml(customer.cname || "")}"
+                data-customer-id="${customer.customerid ?? ""}"
+                tabindex="0"
+              >
+                <div class="suggestion-name">${escapeHtml(customer.cname || "-")}</div>
+                <div class="suggestion-meta">
+                  Route ${escapeHtml(customer.RouteNumber ?? "-")} · ${escapeHtml(customer.status ?? "-")} · ${Number(customer.kwh ?? 0)} kWh
+                </div>
+              </div>
+            `,
+          )
+          .join("");
+
+        suggestionsBox.style.display = "block";
+      }
+
+      async function fetchSuggestions(query) {
+        const value = query.trim();
+        if (!value || value.length < 2) {
+          renderSuggestions([]);
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `/api/customers?q=${encodeURIComponent(value)}&month=${encodeURIComponent(monthFilter.value)}&page=1&pageSize=6`,
+          );
+
+          if (!response.ok) {
+            renderSuggestions([]);
+            return;
+          }
+
+          const data = await response.json();
+          const customers = (data.results || []).slice(0, 6);
+          renderSuggestions(customers);
+        } catch (error) {
+          renderSuggestions([]);
+        }
+      }
+
+      function updatePaginationControls() {
+        prevPageBtn.disabled = currentPage <= 1;
+        nextPageBtn.disabled = currentPage >= totalPages || totalPages === 0;
+        pageInfo.textContent =
+          totalPages > 0 ? `Page ${currentPage} of ${totalPages}` : "Page 1";
+      }
+
+      async function searchCustomers(
+        query = "",
+        status = "",
+        routeNumber = "",
+        month = "kwh202607",
+        page = 1,
+      ) {
+        currentPage = page;
+        updateKwhHeader(month);
+        statusBox.textContent =
+          query || status || routeNumber
+            ? `Searching for "${query || status || routeNumber}"...`
+            : "Loading customers...";
+
+        try {
+          const response = await fetch(
+            `/api/customers?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&routeNumber=${encodeURIComponent(routeNumber)}&month=${encodeURIComponent(month)}&page=${page}&pageSize=20`,
+          );
+          const contentType = response.headers.get("content-type") || "";
+
+          if (!contentType.includes("application/json")) {
+            throw new Error(
+              "The server returned HTML instead of JSON. Open http://localhost:3000 and make sure the app is running.",
+            );
+          }
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Search failed.");
+          }
+
+          const results = data.results || [];
+          totalPages = data.totalPages || 1;
+
+          summaryBox.textContent = `Total matches: ${data.total || 0} · Total KWh (${monthLabels[month] || month}): ${data.totalKwh ?? 0}`;
+
+          if (!results.length) {
+            resultsBody.innerHTML =
+              '<tr><td colspan="9" class="empty">No matching customers found.</td></tr>';
+            statusBox.textContent =
+              query || status || routeNumber
+                ? `No results for "${query || status || routeNumber}".`
+                : "No customers found.";
+            updatePaginationControls();
+            return;
+          }
+
+          resultsBody.innerHTML = results
+            .map(
+              (row) => `
+                <tr data-customer-id="${row.customerid ?? ""}">
+                  <td>${row.customerid ?? "-"}</td>
+                  <td>${row.cname ?? "-"}</td>
+                  <td>${row.ctype ?? "-"}</td>
+                  <td>${row.caddress ?? "-"}</td>
+                  <td>${row.Barangay ?? "-"}</td>
+                  <td>${row.Town ?? "-"}</td>
+                  <td>${row.RouteNumber ?? "-"}</td>
+                  <td>${row.status ?? "-"}</td>
+                  <td>${row.kwh ?? 0}</td>
+                </tr>
+              `,
+            )
+            .join("");
+
+          statusBox.textContent = `Showing ${results.length} customer(s).`;
+          updatePaginationControls();
+        } catch (error) {
+          resultsBody.innerHTML =
+            '<tr><td colspan="9" class="empty">Unable to search customers.</td></tr>';
+          statusBox.textContent = error.message;
+          summaryBox.textContent = "";
+          updatePaginationControls();
+        }
+      }
+
+      function triggerSearch() {
+        const query = searchInput.value.trim();
+        const status = statusFilter.value;
+        const routeNumber = routeFilter.value.trim();
+        const month = monthFilter.value;
+
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+
+        debounceTimer = setTimeout(() => {
+          searchCustomers(query, status, routeNumber, month, 1);
+        }, 250);
+      }
+
+      function selectSuggestedCustomer(customerId, name) {
+        searchInput.value = name;
+        suggestionsBox.innerHTML = "";
+        suggestionsBox.style.display = "none";
+        if (customerId) {
+          openHistoryModal(customerId);
+        }
+        searchCustomers(
+          name,
+          statusFilter.value,
+          routeFilter.value.trim(),
+          monthFilter.value,
+          1,
+        );
+      }
+
+      function downloadCsvHistory() {
+        if (!currentHistoryRows.length) {
+          statusBox.textContent = "There is no KWh history to export yet.";
+          return;
+        }
+
+        const customer = currentCustomerDetails || {};
+        const csvRows = [
+          ["Customer ID", customer.customerid ?? ""],
+          ["Customer Name", customer.cname ?? ""],
+          ["Customer Type", customer.ctype ?? ""],
+          ["Address", customer.caddress ?? ""],
+          ["Barangay", customer.Barangay ?? ""],
+          ["Town", customer.Town ?? ""],
+          ["Route Number", customer.RouteNumber ?? ""],
+          ["Status", customer.status ?? ""],
+          [],
+          ["Month", "KWh"],
+          ...currentHistoryRows.map((row) => [
+            row.label,
+            Number(row.value || 0),
+          ]),
+        ];
+
+        const csvContent = csvRows
+          .map((row) =>
+            row
+              .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+              .join(","),
+          )
+          .join("\n");
+
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${currentCustomerName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "customer"}_kwh_history.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      async function openHistoryModal(customerId) {
+        try {
+          const response = await fetch(`/api/customer/${customerId}/history`);
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Unable to load customer history.");
+          }
+
+          const customer = data.customer || {};
+          const history = data.history || [];
+
+          currentHistoryRows = history;
+          currentCustomerName = customer.cname || "Customer";
+          currentCustomerDetails = customer;
+
+          historyTitle.textContent = `${currentCustomerName} KWh History`;
+          historySummary.textContent = `Route ${customer.RouteNumber ?? "-"} · ${customer.status ?? "-"} · ${customer.caddress ?? "-"}`;
+
+          if (!history.length) {
+            historyBody.innerHTML =
+              '<tr><td colspan="2" class="empty">No KWh history available.</td></tr>';
+          } else {
+            historyBody.innerHTML = history
+              .map(
+                (entry) => `
+                  <tr>
+                    <td>${entry.label}</td>
+                    <td>${Number(entry.value || 0)}</td>
+                  </tr>
+                `,
+              )
+              .join("");
+          }
+
+          historyModal.classList.add("open");
+          historyModal.setAttribute("aria-hidden", "false");
+        } catch (error) {
+          statusBox.textContent = error.message;
+        }
+      }
+
+      searchInput.addEventListener("input", () => {
+        triggerSearch();
+        fetchSuggestions(searchInput.value);
+      });
+
+      searchInput.addEventListener("focus", () => {
+        if (searchInput.value.trim()) {
+          fetchSuggestions(searchInput.value);
+        }
+      });
+
+      searchInput.addEventListener("blur", () => {
+        setTimeout(() => {
+          suggestionsBox.style.display = "none";
+        }, 180);
+      });
+
+      suggestionsBox.addEventListener("mousedown", (event) => {
+        const item = event.target.closest(".suggestion-item");
+        if (!item) {
+          return;
+        }
+        event.preventDefault();
+        selectSuggestedCustomer(
+          item.dataset.customerId || "",
+          item.dataset.name || searchInput.value,
+        );
+      });
+
+      resultsBody.addEventListener("click", (event) => {
+        const row = event.target.closest("tr[data-customer-id]");
+        if (!row) {
+          return;
+        }
+        openHistoryModal(row.dataset.customerId);
+      });
+
+      closeHistoryModalBtn.addEventListener("click", () => {
+        historyModal.classList.remove("open");
+        historyModal.setAttribute("aria-hidden", "true");
+      });
+
+      downloadHistoryCsvBtn.addEventListener("click", downloadCsvHistory);
+
+      historyModal.addEventListener("click", (event) => {
+        if (event.target === historyModal) {
+          historyModal.classList.remove("open");
+          historyModal.setAttribute("aria-hidden", "true");
+        }
+      });
+
+      routeFilter.addEventListener("input", triggerSearch);
+      statusFilter.addEventListener("change", triggerSearch);
+      monthFilter.addEventListener("change", () => {
+        triggerSearch();
+        if (searchInput.value.trim()) {
+          fetchSuggestions(searchInput.value);
+        }
+      });
+
+      searchForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        searchCustomers(
+          searchInput.value.trim(),
+          statusFilter.value,
+          routeFilter.value.trim(),
+          monthFilter.value,
+          1,
+        );
+      });
+
+      clearFiltersBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        routeFilter.value = "";
+        statusFilter.value = "";
+        monthFilter.value = "kwh202607";
+        currentPage = 1;
+        searchCustomers();
+      });
+
+      prevPageBtn.addEventListener("click", () => {
+        if (currentPage > 1) {
+          searchCustomers(
+            searchInput.value.trim(),
+            statusFilter.value,
+            routeFilter.value.trim(),
+            monthFilter.value,
+            currentPage - 1,
+          );
+        }
+      });
+
+      nextPageBtn.addEventListener("click", () => {
+        if (currentPage < totalPages) {
+          searchCustomers(
+            searchInput.value.trim(),
+            statusFilter.value,
+            routeFilter.value.trim(),
+            monthFilter.value,
+            currentPage + 1,
+          );
+        }
+      });
+
+      searchCustomers();
+    </script>
+  </body>
+</html>

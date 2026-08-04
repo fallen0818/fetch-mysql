@@ -1,0 +1,20 @@
+{
+  "name": "fetch-mysql",
+  "version": "1.0.0",
+  "main": "package.js",
+  "scripts": {
+    "fetch": "node package.js fetch",
+    "push": "node package.js push",
+    "sync": "node package.js sync",
+    "test": "node --check package.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "body-parser": "^2.3.0",
+    "express": "^5.2.1",
+    "mysql2": "^3.12.0"
+  }
+}
