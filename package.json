@@ -17,8 +17,11 @@
   "description": "",
   "dependencies": {
     "body-parser": "^2.3.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mysql2": "^3.12.0",
+    "express-rate-limit": "^8.6.2",
+    "mysql2": "^3.23.2",
     "serverless-http": "^4.0.0"
   }
 }

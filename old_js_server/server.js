@@ -125,96 +125,6 @@ app.get("/api/months", async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Routes — /api/debug (TEMPORARY — remove after diagnosing)
-// ---------------------------------------------------------------------------
-
-app.get("/api/debug", async (req, res, next) => {
-  try {
-    const [dbRows] = await pool.query("SELECT DATABASE() AS db");
-    const connectedDb = dbRows[0]?.db ?? null;
-
-    const [cols] = await pool.query("SHOW COLUMNS FROM tblcustomer");
-    const columnNames = cols.map((c) => c.Field);
-
-    const [countRows] = await pool.query(
-      "SELECT COUNT(*) AS total FROM tblcustomer"
-    );
-    const totalRows = countRows[0]?.total ?? 0;
-
-    const [distinctTowns] = await pool.query(
-      "SELECT COUNT(DISTINCT TOWN) AS n FROM tblcustomer"
-    );
-
-    const [sample] = await pool.query(
-      "SELECT CUSTOMERID, TOWN, BARANGAY FROM tblcustomer LIMIT 3"
-    );
-
-    return res.json({
-      connectedDb,
-      totalRows,
-      distinctTownCount: distinctTowns[0]?.n ?? 0,
-      columnNames,
-      sample,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Routes — /api/filters (distinct towns & barangays)
-// ---------------------------------------------------------------------------
-
-app.get("/api/filters", async (req, res, next) => {
-  try {
-    const town = String(req.query.town || "").trim();
-
-    // Discover the real column names (handles casing / naming differences)
-    const [cols] = await pool.query("SHOW COLUMNS FROM tblcustomer");
-    const fields = cols.map((c) => c.Field);
-    const townCol = fields.find((f) => f.toLowerCase() === "town");
-    const brgyCol = fields.find((f) => f.toLowerCase() === "barangay");
-
-    if (!townCol || !brgyCol) {
-      return res.json({
-        towns: [],
-        barangays: [],
-        debug: {
-          message: "Could not find TOWN/BARANGAY columns.",
-          availableColumns: fields,
-        },
-      });
-    }
-
-    const [townRows] = await pool.query(
-      `SELECT DISTINCT \`${townCol}\` AS val FROM tblcustomer WHERE \`${townCol}\` IS NOT NULL AND TRIM(\`${townCol}\`) != '' ORDER BY \`${townCol}\``
-    );
-    const towns = townRows
-      .map((r) => r.val)
-      .filter((v) => v != null && String(v).trim() !== "");
-
-    let barangaySql = `SELECT DISTINCT \`${brgyCol}\` AS val FROM tblcustomer WHERE \`${brgyCol}\` IS NOT NULL AND TRIM(\`${brgyCol}\`) != ''`;
-    const barangayParams = [];
-
-    if (town) {
-      barangaySql += ` AND LOWER(\`${townCol}\`) = LOWER(?)`;
-      barangayParams.push(town);
-    }
-
-    barangaySql += ` ORDER BY \`${brgyCol}\``;
-
-    const [brgyRows] = await pool.query(barangaySql, barangayParams);
-    const barangays = brgyRows
-      .map((r) => r.val)
-      .filter((v) => v != null && String(v).trim() !== "");
-
-    return res.json({ towns, barangays });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Routes — /api/customers
 // ---------------------------------------------------------------------------
 
@@ -226,8 +136,6 @@ app.get("/api/customers", async (req, res, next) => {
       .slice(0, MAX_QUERY_LENGTH);
     const status = String(req.query.status || "").trim().slice(0, 50);
     const routeNumber = String(req.query.routeNumber || "").trim();
-    const town = String(req.query.town || "").trim().slice(0, 100);
-    const barangay = String(req.query.barangay || "").trim().slice(0, 100);
     const month = String(req.query.month || "").trim();
 
     const page = clampInt(req.query.page, 1, 10000, 1);
@@ -270,16 +178,6 @@ app.get("/api/customers", async (req, res, next) => {
         conditions.push("c.ROUTENUMBER = ?");
         params.push(rn);
       }
-    }
-
-    if (town) {
-      conditions.push("LOWER(c.TOWN) = LOWER(?)");
-      params.push(town);
-    }
-
-    if (barangay) {
-      conditions.push("LOWER(c.BARANGAY) = LOWER(?)");
-      params.push(barangay);
     }
 
     const whereClause = conditions.length

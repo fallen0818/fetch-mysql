@@ -578,12 +578,6 @@
             min="1"
             placeholder="Route number"
           />
-          <select id="townFilter">
-            <option value="">All towns</option>
-          </select>
-          <select id="barangayFilter">
-            <option value="">All barangays</option>
-          </select>
           <select id="statusFilter">
             <option value="">All status</option>
             <option value="Active">Active</option>
@@ -703,8 +697,6 @@
       const searchForm = document.getElementById("searchForm");
       const searchInput = document.getElementById("searchInput");
       const routeFilter = document.getElementById("routeFilter");
-      const townFilter = document.getElementById("townFilter");
-      const barangayFilter = document.getElementById("barangayFilter");
       const statusFilter = document.getElementById("statusFilter");
       const monthFilter = document.getElementById("monthFilter");
       const clearFiltersBtn = document.getElementById("clearFilters");
@@ -800,14 +792,11 @@
           const defaultMonth =
             data.defaultMonth || months[months.length - 1] || "";
           setMonthOptions(months, defaultMonth);
-          await loadFilters();
           if (months.length) {
             searchCustomers(
               searchInput.value.trim(),
               statusFilter.value,
               routeFilter.value.trim(),
-              townFilter.value,
-              barangayFilter.value,
               defaultMonth,
               1,
             );
@@ -816,42 +805,6 @@
           monthFilter.innerHTML = '<option value="kwh202607">2026-07</option>';
           monthFilter.value = "kwh202607";
           updateKwhHeader("kwh202607");
-        }
-      }
-
-      async function loadFilters(selectedTown) {
-        try {
-          const url = selectedTown
-            ? `/api/filters?town=${encodeURIComponent(selectedTown)}`
-            : "/api/filters";
-          const response = await fetch(url);
-          if (!response.ok) return;
-
-          const data = await response.json();
-          const towns = (Array.isArray(data.towns) ? data.towns : []).filter(Boolean);
-          const barangays = (Array.isArray(data.barangays) ? data.barangays : []).filter(Boolean);
-
-          const prevTown = townFilter.value;
-          townFilter.innerHTML = '<option value="">All towns</option>';
-          towns.forEach((t) => {
-            const opt = document.createElement("option");
-            opt.value = t;
-            opt.textContent = t;
-            if (t === prevTown) opt.selected = true;
-            townFilter.appendChild(opt);
-          });
-
-          const prevBrgy = barangayFilter.value;
-          barangayFilter.innerHTML = '<option value="">All barangays</option>';
-          barangays.forEach((b) => {
-            const opt = document.createElement("option");
-            opt.value = b;
-            opt.textContent = b;
-            if (b === prevBrgy) opt.selected = true;
-            barangayFilter.appendChild(opt);
-          });
-        } catch (error) {
-          // keep existing options on failure
         }
       }
 
@@ -914,21 +867,19 @@
         query = "",
         status = "",
         routeNumber = "",
-        town = "",
-        barangay = "",
         month = "kwh202607",
         page = 1,
       ) {
         currentPage = page;
         updateKwhHeader(month);
-        const searchLabel = query || status || routeNumber || town || barangay;
-        statusBox.textContent = searchLabel
-          ? `Searching for "${searchLabel}"...`
-          : "Loading customers...";
+        statusBox.textContent =
+          query || status || routeNumber
+            ? `Searching for "${query || status || routeNumber}"...`
+            : "Loading customers...";
 
         try {
           const response = await fetch(
-            `/api/customers?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&routeNumber=${encodeURIComponent(routeNumber)}&town=${encodeURIComponent(town)}&barangay=${encodeURIComponent(barangay)}&month=${encodeURIComponent(month)}&page=${page}&pageSize=20`,
+            `/api/customers?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&routeNumber=${encodeURIComponent(routeNumber)}&month=${encodeURIComponent(month)}&page=${page}&pageSize=20`,
           );
           const contentType = response.headers.get("content-type") || "";
 
@@ -993,14 +944,12 @@
         const query = searchInput.value.trim();
         const status = statusFilter.value;
         const routeNumber = routeFilter.value.trim();
-        const town = townFilter.value;
-        const barangay = barangayFilter.value;
         const month = monthFilter.value;
 
         if (debounceTimer) clearTimeout(debounceTimer);
 
         debounceTimer = setTimeout(() => {
-          searchCustomers(query, status, routeNumber, town, barangay, month, 1);
+          searchCustomers(query, status, routeNumber, month, 1);
         }, 250);
       }
 
@@ -1013,8 +962,6 @@
           name,
           statusFilter.value,
           routeFilter.value.trim(),
-          townFilter.value,
-          barangayFilter.value,
           monthFilter.value,
           1,
         );
@@ -1160,15 +1107,6 @@
 
       routeFilter.addEventListener("input", triggerSearch);
       statusFilter.addEventListener("change", triggerSearch);
-
-      townFilter.addEventListener("change", () => {
-        barangayFilter.value = "";
-        loadFilters(townFilter.value);
-        triggerSearch();
-      });
-
-      barangayFilter.addEventListener("change", triggerSearch);
-
       monthFilter.addEventListener("change", () => {
         triggerSearch();
         if (searchInput.value.trim()) fetchSuggestions(searchInput.value);
@@ -1181,8 +1119,6 @@
           searchInput.value.trim(),
           statusFilter.value,
           routeFilter.value.trim(),
-          townFilter.value,
-          barangayFilter.value,
           monthFilter.value,
           1,
         );
@@ -1191,13 +1127,10 @@
       clearFiltersBtn.addEventListener("click", () => {
         searchInput.value = "";
         routeFilter.value = "";
-        townFilter.value = "";
-        barangayFilter.value = "";
         statusFilter.value = "";
         if (defaultMonthValue) monthFilter.value = defaultMonthValue;
         currentPage = 1;
-        loadFilters();
-        searchCustomers("", "", "", "", "", monthFilter.value || defaultMonthValue, 1);
+        searchCustomers("", "", "", monthFilter.value || defaultMonthValue, 1);
       });
 
       prevPageBtn.addEventListener("click", () => {
@@ -1206,8 +1139,6 @@
             searchInput.value.trim(),
             statusFilter.value,
             routeFilter.value.trim(),
-            townFilter.value,
-            barangayFilter.value,
             monthFilter.value,
             currentPage - 1,
           );
@@ -1220,8 +1151,6 @@
             searchInput.value.trim(),
             statusFilter.value,
             routeFilter.value.trim(),
-            townFilter.value,
-            barangayFilter.value,
             monthFilter.value,
             currentPage + 1,
           );
