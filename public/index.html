@@ -537,6 +537,7 @@
       .export-bar {
         display: flex;
         justify-content: flex-end;
+        gap: 10px;
         margin-bottom: 10px;
       }
 
@@ -618,8 +619,11 @@
         ></div>
 
         <div class="export-bar">
-          <button id="exportResultsCsv" type="button" class="history-download">
-            Export Page to CSV
+          <button id="exportResultsCsv" type="button" class="history-download secondary">
+            Export Page
+          </button>
+          <button id="exportAllCsv" type="button" class="history-download">
+            Export All Matches
           </button>
         </div>
 
@@ -743,6 +747,7 @@
         document.getElementById("downloadHistoryCsv");
       const exportResultsCsvBtn =
         document.getElementById("exportResultsCsv");
+      const exportAllCsvBtn = document.getElementById("exportAllCsv");
 
       let debounceTimer = null;
       let currentPage = 1;
@@ -1049,6 +1054,55 @@
         return `"${String(value ?? "").replace(/"/g, '""')}"`;
       }
 
+      function currentFilterQueryString() {
+        const params = new URLSearchParams({
+          q: searchInput.value.trim(),
+          status: statusFilter.value,
+          routeNumber: routeFilter.value.trim(),
+          town: townFilter.value,
+          barangay: barangayFilter.value,
+          reading: readingFilter.value,
+          month: monthFilter.value,
+        });
+        return params.toString();
+      }
+
+      async function exportAllToCsv() {
+        const btn = exportAllCsvBtn;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Preparing...";
+        try {
+          const response = await fetch(
+            `/api/customers/export?${currentFilterQueryString()}`
+          );
+          if (!response.ok) {
+            let msg = "Export failed.";
+            try {
+              const err = await response.json();
+              msg = err.message || msg;
+            } catch (_) {}
+            throw new Error(msg);
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          const month = monthFilter.value || "export";
+          link.download = `customers_${month}_all.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          statusBox.textContent = error.message;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+
       function exportResultsToCsv() {
         if (!currentResults.length) {
           statusBox.textContent = "There are no results to export.";
@@ -1233,6 +1287,7 @@
 
       downloadHistoryCsvBtn.addEventListener("click", downloadCsvHistory);
       exportResultsCsvBtn.addEventListener("click", exportResultsToCsv);
+      exportAllCsvBtn.addEventListener("click", exportAllToCsv);
 
       historyModal.addEventListener("click", (event) => {
         if (event.target === historyModal) {

@@ -182,20 +182,83 @@ app.get("/api/filters", async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// Shared filter builder — used by /api/customers and /api/customers/export
+// ---------------------------------------------------------------------------
+
+function buildCustomerFilters(req, selectedMonth) {
+  const query = String(req.query.q || "")
+    .trim()
+    .slice(0, MAX_QUERY_LENGTH);
+  const status = String(req.query.status || "").trim().slice(0, 50);
+  const routeNumber = String(req.query.routeNumber || "").trim();
+  const town = String(req.query.town || "").trim().slice(0, 100);
+  const barangay = String(req.query.barangay || "").trim().slice(0, 100);
+  const reading = String(req.query.reading || "").trim().toLowerCase();
+
+  const conditions = [];
+  const params = [];
+
+  if (query) {
+    conditions.push(
+      "(UPPER(c.CNAME) LIKE UPPER(?) OR UPPER(c.CTYPE) LIKE UPPER(?) OR UPPER(c.CADDRESS) LIKE UPPER(?) OR UPPER(c.BARANGAY) LIKE UPPER(?) OR UPPER(c.TOWN) LIKE UPPER(?))"
+    );
+    const wildcard = `%${query}%`;
+    params.push(wildcard, wildcard, wildcard, wildcard, wildcard);
+  }
+
+  if (status) {
+    conditions.push("LOWER(c.STATUS) = LOWER(?)");
+    params.push(status);
+  }
+
+  if (routeNumber) {
+    const rn = Number(routeNumber);
+    if (Number.isFinite(rn)) {
+      conditions.push("c.ROUTENUMBER = ?");
+      params.push(rn);
+    }
+  }
+
+  if (town) {
+    conditions.push(
+      "LOWER(TRIM(REPLACE(REPLACE(c.TOWN, '\\r', ''), '\\n', ''))) = LOWER(?)"
+    );
+    params.push(town);
+  }
+
+  if (barangay) {
+    conditions.push(
+      "LOWER(TRIM(REPLACE(REPLACE(c.BARANGAY, '\\r', ''), '\\n', ''))) = LOWER(?)"
+    );
+    params.push(barangay);
+  }
+
+  // Reading filter — selectedMonth is regex-validated (^kwh\d{6}$) so it's safe
+  // to interpolate. NULL from the LEFT JOIN counts as zero.
+  if (reading === "zero") {
+    conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) = 0`);
+  } else if (reading === "nonzero") {
+    conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) <> 0`);
+  }
+
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
+
+  return { whereClause, params };
+}
+
+function csvEscape(value) {
+  const s = value == null ? "" : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+// ---------------------------------------------------------------------------
 // Routes — /api/customers
 // ---------------------------------------------------------------------------
 
 app.get("/api/customers", async (req, res, next) => {
   try {
-    // --- Parse & sanitise inputs -----------------------------------------
-    const query = String(req.query.q || "")
-      .trim()
-      .slice(0, MAX_QUERY_LENGTH);
-    const status = String(req.query.status || "").trim().slice(0, 50);
-    const routeNumber = String(req.query.routeNumber || "").trim();
-    const town = String(req.query.town || "").trim().slice(0, 100);
-    const barangay = String(req.query.barangay || "").trim().slice(0, 100);
-    const reading = String(req.query.reading || "").trim().toLowerCase();
     const month = String(req.query.month || "").trim();
 
     const page = clampInt(req.query.page, 1, 10000, 1);
@@ -210,61 +273,11 @@ app.get("/api/customers", async (req, res, next) => {
       return res.status(400).json({ message: "No kwh month data available." });
     }
 
-    // Safety: even though we validated against DB columns, enforce the regex
     if (!MONTH_COLUMN_REGEX.test(selectedMonth)) {
       return res.status(400).json({ message: "Invalid month parameter." });
     }
 
-    // --- Build WHERE clause ----------------------------------------------
-    const conditions = [];
-    const params = [];
-
-    if (query) {
-      conditions.push(
-        "(UPPER(c.CNAME) LIKE UPPER(?) OR UPPER(c.CTYPE) LIKE UPPER(?) OR UPPER(c.CADDRESS) LIKE UPPER(?) OR UPPER(c.BARANGAY) LIKE UPPER(?) OR UPPER(c.TOWN) LIKE UPPER(?))"
-      );
-      const wildcard = `%${query}%`;
-      params.push(wildcard, wildcard, wildcard, wildcard, wildcard);
-    }
-
-    if (status) {
-      conditions.push("LOWER(c.STATUS) = LOWER(?)");
-      params.push(status);
-    }
-
-    if (routeNumber) {
-      const rn = Number(routeNumber);
-      if (Number.isFinite(rn)) {
-        conditions.push("c.ROUTENUMBER = ?");
-        params.push(rn);
-      }
-    }
-
-    if (town) {
-      conditions.push(
-        "LOWER(TRIM(REPLACE(REPLACE(c.TOWN, '\\r', ''), '\\n', ''))) = LOWER(?)"
-      );
-      params.push(town);
-    }
-
-    if (barangay) {
-      conditions.push(
-        "LOWER(TRIM(REPLACE(REPLACE(c.BARANGAY, '\\r', ''), '\\n', ''))) = LOWER(?)"
-      );
-      params.push(barangay);
-    }
-
-    // Reading filter — selectedMonth is regex-validated (^kwh\d{6}$) so it's safe
-    // to interpolate. NULL from the LEFT JOIN counts as zero.
-    if (reading === "zero") {
-      conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) = 0`);
-    } else if (reading === "nonzero") {
-      conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) <> 0`);
-    }
-
-    const whereClause = conditions.length
-      ? `WHERE ${conditions.join(" AND ")}`
-      : "";
+    const { whereClause, params } = buildCustomerFilters(req, selectedMonth);
 
     // --- Count query ------------------------------------------------------
     const countSql = `
@@ -299,6 +312,84 @@ app.get("/api/customers", async (req, res, next) => {
       selectedMonth,
       totalKwh,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Routes — /api/customers/export (all matching rows as CSV)
+// ---------------------------------------------------------------------------
+
+const MAX_EXPORT_ROWS = 100000;
+
+app.get("/api/customers/export", async (req, res, next) => {
+  try {
+    const month = String(req.query.month || "").trim();
+
+    const availableMonths = await getAvailableKwhMonths();
+    const selectedMonth = resolveSelectedMonth(availableMonths, month);
+
+    if (!selectedMonth || !MONTH_COLUMN_REGEX.test(selectedMonth)) {
+      return res.status(400).json({ message: "Invalid or missing month." });
+    }
+
+    const { whereClause, params } = buildCustomerFilters(req, selectedMonth);
+
+    const dataSql = `
+      SELECT c.*, k.\`${selectedMonth}\` AS kwh
+      FROM tblcustomer c
+      LEFT JOIN tblkwh k ON k.customerid = c.customerid
+      ${whereClause}
+      ORDER BY c.customerid DESC
+      LIMIT ?
+    `;
+    const [dataRows] = await pool.query(dataSql, [...params, MAX_EXPORT_ROWS]);
+    const normalized = (dataRows || []).map(normalizeCustomer);
+
+    const monthLabel = `${selectedMonth.slice(3, 7)}-${selectedMonth.slice(7, 9)}`;
+
+    const header = [
+      "Customer ID",
+      "Name",
+      "Type",
+      "Address",
+      "Barangay",
+      "Town",
+      "Route",
+      "Status",
+      `KWh ${monthLabel}`,
+    ];
+
+    const lines = [header.map(csvEscape).join(",")];
+    for (const r of normalized) {
+      lines.push(
+        [
+          r.customerid,
+          r.cname,
+          r.ctype,
+          r.caddress,
+          r.Barangay,
+          r.Town,
+          r.RouteNumber,
+          r.status,
+          Number(r.kwh ?? 0),
+        ]
+          .map(csvEscape)
+          .join(",")
+      );
+    }
+
+    // Prepend BOM so Excel reads UTF-8 correctly
+    const csv = "\uFEFF" + lines.join("\r\n");
+
+    const filename = `customers_${selectedMonth}_all.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    return res.send(csv);
   } catch (error) {
     next(error);
   }

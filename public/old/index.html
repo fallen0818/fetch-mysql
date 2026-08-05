@@ -534,6 +534,12 @@
         align-items: center;
       }
 
+      .export-bar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+      }
+
       .pagination-bar .status {
         margin: 0;
         color: var(--page-info);
@@ -610,6 +616,12 @@
           class="status"
           style="margin-top: -8px; margin-bottom: 12px"
         ></div>
+
+        <div class="export-bar">
+          <button id="exportResultsCsv" type="button" class="history-download">
+            Export Page to CSV
+          </button>
+        </div>
 
         <div class="table-wrap">
           <table>
@@ -729,10 +741,14 @@
       const closeHistoryModalBtn = document.getElementById("closeHistoryModal");
       const downloadHistoryCsvBtn =
         document.getElementById("downloadHistoryCsv");
+      const exportResultsCsvBtn =
+        document.getElementById("exportResultsCsv");
 
       let debounceTimer = null;
       let currentPage = 1;
       let totalPages = 1;
+      let currentResults = [];
+      let currentResultsMonth = "";
       let currentHistoryRows = [];
       let currentCustomerName = "customer";
       let currentCustomerDetails = {};
@@ -953,6 +969,8 @@
 
           const results = data.results || [];
           totalPages = data.totalPages || 1;
+          currentResults = results;
+          currentResultsMonth = month;
 
           summaryBox.textContent = `Total matches: ${data.total || 0} \u00b7 Total KWh (${monthLabels[month] || month}): ${data.totalKwh ?? 0}`;
 
@@ -1025,6 +1043,63 @@
           monthFilter.value,
           1,
         );
+      }
+
+      function csvCell(value) {
+        return `"${String(value ?? "").replace(/"/g, '""')}"`;
+      }
+
+      function exportResultsToCsv() {
+        if (!currentResults.length) {
+          statusBox.textContent = "There are no results to export.";
+          return;
+        }
+
+        const monthLabel =
+          monthLabels[currentResultsMonth] ||
+          formatMonthLabel(currentResultsMonth) ||
+          "KWh";
+
+        const header = [
+          "Customer ID",
+          "Name",
+          "Type",
+          "Address",
+          "Barangay",
+          "Town",
+          "Route",
+          "Status",
+          `KWh ${monthLabel}`,
+        ];
+
+        const rows = currentResults.map((r) => [
+          r.customerid ?? "",
+          r.cname ?? "",
+          r.ctype ?? "",
+          r.caddress ?? "",
+          r.Barangay ?? "",
+          r.Town ?? "",
+          r.RouteNumber ?? "",
+          r.status ?? "",
+          Number(r.kwh ?? 0),
+        ]);
+
+        const csvContent = [header, ...rows]
+          .map((row) => row.map(csvCell).join(","))
+          .join("\r\n");
+
+        // Prepend BOM so Excel reads UTF-8 (Ñ, é, etc.) correctly
+        const blob = new Blob(["\uFEFF" + csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `customers_${currentResultsMonth || "export"}_page${currentPage}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
 
       /* ================================================================== */
@@ -1157,6 +1232,7 @@
       });
 
       downloadHistoryCsvBtn.addEventListener("click", downloadCsvHistory);
+      exportResultsCsvBtn.addEventListener("click", exportResultsToCsv);
 
       historyModal.addEventListener("click", (event) => {
         if (event.target === historyModal) {
