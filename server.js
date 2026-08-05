@@ -69,15 +69,19 @@ function normalizeCustomer(row) {
     ci[key.toLowerCase()] = row[key];
   }
 
+  // Strip stray carriage returns / newlines that came from CSV imports
+  const clean = (v) =>
+    v == null ? "" : String(v).replace(/[\r\n]+/g, "").trim();
+
   return {
     customerid: ci.customerid ?? null,
-    ctype: ci.ctype ?? "",
-    caddress: ci.caddress ?? "",
-    Barangay: ci.barangay ?? "",
-    Town: ci.town ?? "",
+    ctype: clean(ci.ctype),
+    caddress: clean(ci.caddress),
+    Barangay: clean(ci.barangay),
+    Town: clean(ci.town),
     RouteNumber: ci.routenumber ?? 0,
-    cname: ci.cname ?? "",
-    status: ci.status ?? "Active",
+    cname: clean(ci.cname),
+    status: clean(ci.status) || "Active",
     kwh: Number(ci.kwh ?? 0),
   };
 }
@@ -125,43 +129,6 @@ app.get("/api/months", async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Routes — /api/debug (TEMPORARY — remove after diagnosing)
-// ---------------------------------------------------------------------------
-
-app.get("/api/debug", async (req, res, next) => {
-  try {
-    const [dbRows] = await pool.query("SELECT DATABASE() AS db");
-    const connectedDb = dbRows[0]?.db ?? null;
-
-    const [cols] = await pool.query("SHOW COLUMNS FROM tblcustomer");
-    const columnNames = cols.map((c) => c.Field);
-
-    const [countRows] = await pool.query(
-      "SELECT COUNT(*) AS total FROM tblcustomer"
-    );
-    const totalRows = countRows[0]?.total ?? 0;
-
-    const [distinctTowns] = await pool.query(
-      "SELECT COUNT(DISTINCT TOWN) AS n FROM tblcustomer"
-    );
-
-    const [sample] = await pool.query(
-      "SELECT CUSTOMERID, TOWN, BARANGAY FROM tblcustomer LIMIT 3"
-    );
-
-    return res.json({
-      connectedDb,
-      totalRows,
-      distinctTownCount: distinctTowns[0]?.n ?? 0,
-      columnNames,
-      sample,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Routes — /api/filters (distinct towns & barangays)
 // ---------------------------------------------------------------------------
 
@@ -187,21 +154,21 @@ app.get("/api/filters", async (req, res, next) => {
     }
 
     const [townRows] = await pool.query(
-      `SELECT DISTINCT \`${townCol}\` AS val FROM tblcustomer WHERE \`${townCol}\` IS NOT NULL AND TRIM(\`${townCol}\`) != '' ORDER BY \`${townCol}\``
+      `SELECT DISTINCT TRIM(REPLACE(REPLACE(\`${townCol}\`, '\\r', ''), '\\n', '')) AS val FROM tblcustomer WHERE \`${townCol}\` IS NOT NULL AND TRIM(REPLACE(REPLACE(\`${townCol}\`, '\\r', ''), '\\n', '')) != '' ORDER BY val`
     );
     const towns = townRows
       .map((r) => r.val)
       .filter((v) => v != null && String(v).trim() !== "");
 
-    let barangaySql = `SELECT DISTINCT \`${brgyCol}\` AS val FROM tblcustomer WHERE \`${brgyCol}\` IS NOT NULL AND TRIM(\`${brgyCol}\`) != ''`;
+    let barangaySql = `SELECT DISTINCT TRIM(REPLACE(REPLACE(\`${brgyCol}\`, '\\r', ''), '\\n', '')) AS val FROM tblcustomer WHERE \`${brgyCol}\` IS NOT NULL AND TRIM(REPLACE(REPLACE(\`${brgyCol}\`, '\\r', ''), '\\n', '')) != ''`;
     const barangayParams = [];
 
     if (town) {
-      barangaySql += ` AND LOWER(\`${townCol}\`) = LOWER(?)`;
+      barangaySql += ` AND LOWER(TRIM(REPLACE(REPLACE(\`${townCol}\`, '\\r', ''), '\\n', ''))) = LOWER(?)`;
       barangayParams.push(town);
     }
 
-    barangaySql += ` ORDER BY \`${brgyCol}\``;
+    barangaySql += ` ORDER BY val`;
 
     const [brgyRows] = await pool.query(barangaySql, barangayParams);
     const barangays = brgyRows
@@ -228,6 +195,7 @@ app.get("/api/customers", async (req, res, next) => {
     const routeNumber = String(req.query.routeNumber || "").trim();
     const town = String(req.query.town || "").trim().slice(0, 100);
     const barangay = String(req.query.barangay || "").trim().slice(0, 100);
+    const reading = String(req.query.reading || "").trim().toLowerCase();
     const month = String(req.query.month || "").trim();
 
     const page = clampInt(req.query.page, 1, 10000, 1);
@@ -273,13 +241,25 @@ app.get("/api/customers", async (req, res, next) => {
     }
 
     if (town) {
-      conditions.push("LOWER(c.TOWN) = LOWER(?)");
+      conditions.push(
+        "LOWER(TRIM(REPLACE(REPLACE(c.TOWN, '\\r', ''), '\\n', ''))) = LOWER(?)"
+      );
       params.push(town);
     }
 
     if (barangay) {
-      conditions.push("LOWER(c.BARANGAY) = LOWER(?)");
+      conditions.push(
+        "LOWER(TRIM(REPLACE(REPLACE(c.BARANGAY, '\\r', ''), '\\n', ''))) = LOWER(?)"
+      );
       params.push(barangay);
+    }
+
+    // Reading filter — selectedMonth is regex-validated (^kwh\d{6}$) so it's safe
+    // to interpolate. NULL from the LEFT JOIN counts as zero.
+    if (reading === "zero") {
+      conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) = 0`);
+    } else if (reading === "nonzero") {
+      conditions.push(`COALESCE(k.\`${selectedMonth}\`, 0) <> 0`);
     }
 
     const whereClause = conditions.length
