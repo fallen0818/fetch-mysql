@@ -254,6 +254,39 @@ function csvEscape(value) {
 }
 
 // ---------------------------------------------------------------------------
+// Sorting — whitelist of sortable columns, safe to interpolate since the
+// key/direction are both validated against fixed sets (never raw user input).
+// ---------------------------------------------------------------------------
+
+const SORTABLE_COLUMNS = {
+  id: "c.customerid",
+  name: "c.CNAME",
+  type: "c.CTYPE",
+  address: "c.CADDRESS",
+  barangay: "c.BARANGAY",
+  town: "c.TOWN",
+  route: "c.ROUTENUMBER",
+  status: "c.STATUS",
+};
+
+function buildOrderClause(req, selectedMonth) {
+  const sortKey = String(req.query.sort || "").trim().toLowerCase();
+  const sortDir =
+    String(req.query.dir || "").trim().toLowerCase() === "asc" ? "ASC" : "DESC";
+
+  if (sortKey === "kwh") {
+    return `ORDER BY COALESCE(k.\`${selectedMonth}\`, 0) ${sortDir}, c.customerid DESC`;
+  }
+
+  const column = SORTABLE_COLUMNS[sortKey];
+  if (column) {
+    return `ORDER BY ${column} ${sortDir}, c.customerid DESC`;
+  }
+
+  return "ORDER BY c.customerid DESC";
+}
+
+// ---------------------------------------------------------------------------
 // Routes — /api/customers
 // ---------------------------------------------------------------------------
 
@@ -290,12 +323,13 @@ app.get("/api/customers", async (req, res, next) => {
     const total = Number(countRows[0]?.total ?? 0);
 
     // --- Data query -------------------------------------------------------
+    const orderClause = buildOrderClause(req, selectedMonth);
     const dataSql = `
       SELECT c.*, k.\`${selectedMonth}\` AS kwh
       FROM tblcustomer c
       LEFT JOIN tblkwh k ON k.customerid = c.customerid
       ${whereClause}
-      ORDER BY c.customerid DESC
+      ${orderClause}
       LIMIT ? OFFSET ?
     `;
     const [dataRows] = await pool.query(dataSql, [...params, pageSize, offset]);
@@ -336,12 +370,13 @@ app.get("/api/customers/export", async (req, res, next) => {
 
     const { whereClause, params } = buildCustomerFilters(req, selectedMonth);
 
+    const orderClause = buildOrderClause(req, selectedMonth);
     const dataSql = `
       SELECT c.*, k.\`${selectedMonth}\` AS kwh
       FROM tblcustomer c
       LEFT JOIN tblkwh k ON k.customerid = c.customerid
       ${whereClause}
-      ORDER BY c.customerid DESC
+      ${orderClause}
       LIMIT ?
     `;
     const [dataRows] = await pool.query(dataSql, [...params, MAX_EXPORT_ROWS]);

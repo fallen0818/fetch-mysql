@@ -359,6 +359,33 @@
         border-color: transparent;
       }
 
+      th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+      }
+
+      th[data-sort]:hover {
+        filter: brightness(1.12);
+      }
+
+      th[data-sort]::after {
+        content: "";
+        display: inline-block;
+        width: 0.7em;
+        margin-left: 6px;
+        opacity: 0.5;
+      }
+
+      th[data-sort].sort-asc::after {
+        content: "\25B2";
+        opacity: 1;
+      }
+
+      th[data-sort].sort-desc::after {
+        content: "\25BC";
+        opacity: 1;
+      }
+
       tbody tr { cursor: pointer; }
 
       tbody tr:nth-child(even) td {
@@ -631,15 +658,15 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Address</th>
-                <th>Barangay</th>
-                <th>Town</th>
-                <th>Route</th>
-                <th>Status</th>
-                <th id="kwhHeader" style="text-align:center">KWh 2026-07</th>
+                <th data-sort="id">ID</th>
+                <th data-sort="name">Name</th>
+                <th data-sort="type">Type</th>
+                <th data-sort="address">Address</th>
+                <th data-sort="barangay">Barangay</th>
+                <th data-sort="town">Town</th>
+                <th data-sort="route">Route</th>
+                <th data-sort="status">Status</th>
+                <th id="kwhHeader" data-sort="kwh" style="text-align:center">KWh 2026-07</th>
               </tr>
             </thead>
             <tbody id="resultsBody">
@@ -759,6 +786,10 @@
       let currentCustomerDetails = {};
       let defaultMonthValue = "";
       let monthLabels = {};
+      let currentSortKey = "id";
+      let currentSortDir = "desc";
+
+      const sortableHeaders = document.querySelectorAll("th[data-sort]");
 
       /* ================================================================== */
       /* Helpers                                                            */
@@ -789,6 +820,35 @@
         pageInfo.textContent =
           totalPages > 0 ? `Page ${currentPage} of ${totalPages}` : "Page 1";
       }
+
+      /* ================================================================== */
+      /* Column sorting                                                     */
+      /* ================================================================== */
+      function updateSortIndicators() {
+        sortableHeaders.forEach((th) => {
+          th.classList.remove("sort-asc", "sort-desc");
+          if (th.dataset.sort === currentSortKey) {
+            th.classList.add(currentSortDir === "asc" ? "sort-asc" : "sort-desc");
+          }
+        });
+      }
+
+      sortableHeaders.forEach((th) => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sort;
+          if (currentSortKey === key) {
+            currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+          } else {
+            currentSortKey = key;
+            currentSortDir = "asc";
+          }
+          updateSortIndicators();
+          currentPage = 1;
+          triggerSearch();
+        });
+      });
+
+      updateSortIndicators();
 
       /* ================================================================== */
       /* Month options                                                      */
@@ -956,7 +1016,7 @@
         try {
           const reading = readingFilter.value;
           const response = await fetch(
-            `/api/customers?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&routeNumber=${encodeURIComponent(routeNumber)}&town=${encodeURIComponent(town)}&barangay=${encodeURIComponent(barangay)}&reading=${encodeURIComponent(reading)}&month=${encodeURIComponent(month)}&page=${page}&pageSize=20`,
+            `/api/customers?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&routeNumber=${encodeURIComponent(routeNumber)}&town=${encodeURIComponent(town)}&barangay=${encodeURIComponent(barangay)}&reading=${encodeURIComponent(reading)}&month=${encodeURIComponent(month)}&sort=${encodeURIComponent(currentSortKey)}&dir=${encodeURIComponent(currentSortDir)}&page=${page}&pageSize=20`,
           );
           const contentType = response.headers.get("content-type") || "";
 
@@ -1063,6 +1123,8 @@
           barangay: barangayFilter.value,
           reading: readingFilter.value,
           month: monthFilter.value,
+          sort: currentSortKey,
+          dir: currentSortDir,
         });
         return params.toString();
       }
